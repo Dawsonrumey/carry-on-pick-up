@@ -1,0 +1,45 @@
+name: Build Carry-On Pick-Up APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download repository files
+        uses: actions/checkout@v4
+
+      - name: Extract Android source code
+        run: |
+          unzip carry-on-pick-up-android-source.zip
+          cd carry-on-pick-up-android
+          echo "ANDROID_PROJECT=$PWD" >> $GITHUB_ENV
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build Android APK
+        working-directory: carry-on-pick-up-android
+        run: gradle assembleDebug
+
+      - name: Save APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Carry-On-Pick-Up-APK
+          path: carry-on-pick-up-android/app/build/outputs/apk/debug/app-debug.apk
