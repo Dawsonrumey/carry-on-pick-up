@@ -14,14 +14,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download repository files
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Extract Android source code
-        run: |
-          unzip carry-on-pick-up-android-source.zip
-          cd carry-on-pick-up-android
-          echo "ANDROID_PROJECT=$PWD" >> $GITHUB_ENV
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -34,12 +28,193 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Create Android project
+        run: |
+          mkdir -p app/src/main/java/com/carryonpickup
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "Carry-On-Pick-Up"
+          include(":app")
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.5.2' apply false
+          }
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.carryonpickup'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.carryonpickup'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:label="Carry-On Pick-Up"
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/com/carryonpickup/MainActivity.java <<'EOF'
+          package com.carryonpickup;
+
+          import android.app.Activity;
+          import android.app.AlertDialog;
+          import android.graphics.Color;
+          import android.os.Bundle;
+          import android.view.ViewGroup;
+          import android.widget.*;
+
+          public class MainActivity extends Activity {
+              int dp(int n) {
+                  return (int)(n * getResources().getDisplayMetrics().density);
+              }
+
+              EditText field(LinearLayout layout, String hint) {
+                  EditText e = new EditText(this);
+                  e.setHint(hint);
+                  e.setSingleLine(true);
+                  layout.addView(e, new LinearLayout.LayoutParams(
+                      -1, -2));
+                  return e;
+              }
+
+              @Override
+              public void onCreate(Bundle b) {
+                  super.onCreate(b);
+
+                  ScrollView scroll = new ScrollView(this);
+                  LinearLayout layout = new LinearLayout(this);
+                  layout.setOrientation(1);
+                  layout.setPadding(dp(20), dp(24), dp(20), dp(24));
+                  layout.setBackgroundColor(Color.rgb(245, 248, 253));
+                  scroll.addView(layout);
+
+                  TextView title = new TextView(this);
+                  title.setText("Carry-On Pick-Up");
+                  title.setTextSize(27);
+                  title.setTextColor(Color.rgb(20, 73, 140));
+                  title.setTypeface(null, 1);
+                  layout.addView(title);
+
+                  TextView subtitle = new TextView(this);
+                  subtitle.setText("Parcel Pickup & Delivery\\nAbhaynagar, Jashore");
+                  subtitle.setTextSize(16);
+                  layout.addView(subtitle);
+
+                  TextView heading = new TextView(this);
+                  heading.setText("Book a Pickup");
+                  heading.setTextSize(22);
+                  heading.setPadding(0, dp(20), 0, dp(8));
+                  layout.addView(heading);
+
+                  EditText name = field(layout, "Customer name");
+                  EditText phone = field(layout, "Phone number");
+                  EditText pickup = field(layout, "Pickup address");
+                  EditText delivery = field(layout, "Delivery address");
+
+                  Spinner parcel = new Spinner(this);
+                  String[] types = {
+                      "Clothing", "Food",
+                      "Online shop product", "Documents", "Other"
+                  };
+                  ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                      this, android.R.layout.simple_spinner_item, types);
+                  adapter.setDropDownViewResource(
+                      android.R.layout.simple_spinner_dropdown_item);
+                  parcel.setAdapter(adapter);
+                  layout.addView(parcel);
+
+                  Button button = new Button(this);
+                  button.setText("Review Booking");
+                  layout.addView(button);
+
+                  button.setOnClickListener(v -> {
+                      String n = name.getText().toString().trim();
+                      String p = phone.getText().toString().trim();
+                      String a = pickup.getText().toString().trim();
+                      String d = delivery.getText().toString().trim();
+
+                      if (n.isEmpty() || p.isEmpty()
+                              || a.isEmpty() || d.isEmpty()) {
+                          new AlertDialog.Builder(this)
+                              .setMessage("Please complete all fields.")
+                              .setPositiveButton("OK", null)
+                              .show();
+                          return;
+                      }
+
+                      String details =
+                          "Name: " + n +
+                          "\\nPhone: " + p +
+                          "\\nPickup: " + a +
+                          "\\nDelivery: " + d +
+                          "\\nParcel: " + parcel.getSelectedItem() +
+                          "\\n\\nDemo only: this booking has not been sent.";
+
+                      new AlertDialog.Builder(this)
+                          .setTitle("Booking Review")
+                          .setMessage(details)
+                          .setPositiveButton("OK", null)
+                          .show();
+                  });
+
+                  setContentView(scroll);
+              }
+          }
+          EOF
+
       - name: Build Android APK
-        working-directory: carry-on-pick-up-android
         run: gradle assembleDebug
 
-      - name: Save APK
+      - name: Check APK
+        run: |
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          file app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Carry-On-Pick-Up-APK
-          path: carry-on-pick-up-android/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
